@@ -1,0 +1,30 @@
+void MainWindow::on_okButton_clicked()
+{
+    QString nameText = ui->nameEdit->text().trimmed();
+    QString descText = ui->descEdit->toPlainText().trimmed();
+    QString factorText = ui->factorSpinBox->text().trimmed();
+    QString typeText = ui->typeEdit->text().trimmed();
+
+    if (nameText.isEmpty()) {
+        QMessageBox::warning(this, "Ошибка", "Заполните название.");
+        return;
+    }
+    if (descText.isEmpty()) {
+        QMessageBox::warning(this, "Ошибка", "Заполните описание.");
+        return;
+    }
+    if (factorText.isEmpty() || factorText == "." || !Shield::isValidFactor(factorText)) {
+        QMessageBox::warning(this, "Ошибка", "Введите корректный коэффициент (число от 0 до 1).");
+        return;
+    }
+    if (typeText.isEmpty()) {
+        QMessageBox::warning(this, "Ошибка", "Заполните тип защиты.");
+        return;
+    }
+
+    Shield s = collectFormData();
+    QString fileName = QFileDialog::getSaveFileName(this, "Сохранить JSON", "", "JSON (*.json)");
+    if (fileName.isEmpty()) return;
+    s.saveToFile(fileName);
+    QMessageBox::information(this, "Готово", "Объект сохранён в JSON.");
+}
