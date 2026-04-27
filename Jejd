@@ -1,0 +1,186 @@
+private slots:
+    void on_okButton_clicked();
+    void on_loadTxtButton_clicked();
+    void on_factorSpinBox_textChanged(const QString& text);
+    void on_nameEdit_textChanged(const QString& text);
+    void on_descEdit_textChanged();
+    void on_typeEdit_textChanged(const QString& text);
+
+#include "mainwindow.hpp"
+#include "ui_mainwindow.h"
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QFile>
+#include <QTextStream>
+#include <QMouseEvent>
+
+MainWindow::MainWindow(QWidget *parent) :
+    QMainWindow(parent),
+    ui(new Ui::MainWindow)
+{
+    ui->setupUi(this);
+
+    connect(ui->factorSpinBox, &QLineEdit::textChanged,
+            this, &MainWindow::on_factorSpinBox_textChanged);
+    connect(ui->nameEdit, &QLineEdit::textChanged,
+            this, &MainWindow::on_nameEdit_textChanged);
+    connect(ui->descEdit, &QTextEdit::textChanged,
+            this, &MainWindow::on_descEdit_textChanged);
+    connect(ui->typeEdit, &QLineEdit::textChanged,
+            this, &MainWindow::on_typeEdit_textChanged);
+}
+
+MainWindow::~MainWindow()
+{
+    delete ui;
+}
+
+void MainWindow::mousePressEvent(QMouseEvent *event)
+{
+    QWidget *clickedWidget = childAt(event->pos());
+
+    if (!clickedWidget || clickedWidget == centralWidget()) {
+        ui->nameEdit->clearFocus();
+        ui->descEdit->clearFocus();
+        ui->factorSpinBox->clearFocus();
+        ui->typeEdit->clearFocus();
+    }
+
+    QMainWindow::mousePressEvent(event);
+}
+
+void MainWindow::fillFormFromShield(const Shield& s)
+{
+    ui->nameEdit->setText(s.name);
+    ui->descEdit->setText(s.description);
+    ui->factorSpinBox->setText(QString::number(s.defenseFactor));
+    ui->typeEdit->setText(s.defenseType);
+}
+
+Shield MainWindow::collectFormData() const
+{
+    return Shield(
+        ui->nameEdit->text(),
+        ui->descEdit->toPlainText(),
+        ui->factorSpinBox->text().toDouble(),
+        ui->typeEdit->text()
+    );
+}
+
+void MainWindow::on_okButton_clicked()
+{
+    QString factorText = ui->factorSpinBox->text().trimmed();
+
+    if (factorText.isEmpty() || factorText == "." || !Shield::isValidFactor(factorText)) {
+        QMessageBox::warning(this, "Ошибка", "Введите корректный коэффициент (число от 0 до 1).");
+        return;
+    }
+
+    Shield s = collectFormData();
+    QString fileName = QFileDialog::getSaveFileName(this, "Сохранить JSON", "", "JSON (*.json)");
+    if (fileName.isEmpty()) return;
+    s.saveToFile(fileName);
+    QMessageBox::information(this, "Готово", "Объект сохранён в JSON.");
+}
+
+void MainWindow::on_loadTxtButton_clicked()
+{
+    QString fileName = QFileDialog::getOpenFileName(this, "Открыть TXT", "", "Текстовые файлы (*.txt)");
+    if (fileName.isEmpty()) return;
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+
+    QString name, desc, type;
+    double factor = 0.0;
+
+    while (!file.atEnd()) {
+        QString line = file.readLine().trimmed();
+        if (line.startsWith("Название:"))
+            name = line.mid(QString("Название:").length()).trimmed();
+        else if (line.startsWith("Описание:"))
+            desc = line.mid(QString("Описание:").length()).trimmed();
+        else if (line.startsWith("Коэффициент защиты:"))
+            factor = line.mid(QString("Коэффициент защиты:").length()).trimmed().toDouble();
+        else if (line.startsWith("Тип защиты:"))
+            type = line.mid(QString("Тип защиты:").length()).trimmed();
+    }
+
+    file.close();
+
+    Shield s(name, desc, factor, type);
+    fillFormFromShield(s);
+    QMessageBox::information(this, "Загружено", "Данные из TXT перенесены в форму. Нажмите OK, чтобы сохранить как JSON.");
+}
+
+void MainWindow::on_factorSpinBox_textChanged(const QString& text)
+{
+    if (text.isEmpty()) return;
+
+    QString allowed = "0123456789.";
+    QString filtered;
+
+    for (const QChar& ch : text) {
+        if (allowed.contains(ch)) {
+            if (ch == '.' && filtered.contains('.')) continue;
+            filtered += ch;
+        }
+    }
+
+    if (!filtered.isEmpty() && filtered != ".") {
+        double value = filtered.toDouble();
+        if (value > 1.0) filtered = "1.0";
+    }
+
+    if (filtered != text) {
+        ui->factorSpinBox->blockSignals(true);
+        ui->factorSpinBox->setText(filtered);
+        ui->factorSpinBox->blockSignals(false);
+    }
+}
+
+void MainWindow::on_nameEdit_textChanged(const QString& text)
+{
+    QString filtered;
+    for (const QChar& ch : text) {
+        if (ch.isLetter() || ch == ' ') {
+            filtered += ch;
+        }
+    }
+    if (filtered != text) {
+        ui->nameEdit->blockSignals(true);
+        ui->nameEdit->setText(filtered);
+        ui->nameEdit->blockSignals(false);
+    }
+}
+
+void MainWindow::on_descEdit_textChanged()
+{
+    QString text = ui->descEdit->toPlainText();
+    QString filtered;
+    for (const QChar& ch : text) {
+        if (ch.isLetter() || ch == ' ') {
+            filtered += ch;
+        }
+    }
+    if (filtered != text) {
+        ui->descEdit->blockSignals(true);
+        ui->descEdit->setPlainText(filtered);
+        ui->descEdit->blockSignals(false);
+    }
+}
+
+void MainWindow::on_typeEdit_textChanged(const QString& text)
+{
+    QString filtered;
+    for (const QChar& ch : text) {
+        if (ch.isLetter() || ch == ' ') {
+            filtered += ch;
+        }
+    }
+    if (filtered != text) {
+        ui->typeEdit->blockSignals(true);
+        ui->typeEdit->setText(filtered);
+        ui->typeEdit->blockSignals(false);
+    }
+}
