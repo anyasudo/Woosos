@@ -1,0 +1,264 @@
+#ifndef SHIELD_HPP
+#define SHIELD_HPP
+
+#include <QString>
+#include <QJsonObject>
+
+class Shield
+{
+public:
+    QString name;
+    QString description;
+    double defenseFactor;
+    QString defenseType;
+
+    Shield();
+    Shield(const QString& name, const QString& description,
+           double defenseFactor, const QString& defenseType);
+
+    QJsonObject toJson() const;
+    static Shield fromJson(const QJsonObject& json);
+
+    void saveToFile(const QString& filename) const;
+    static Shield loadFromFile(const QString& filename);
+
+    bool isValid() const;
+    QString errorMessage() const;
+    static bool isValidFactor(const QString& text);
+};
+
+#endif // SHIELD_HPP #include "shield.hpp"
+#include <QJsonDocument>
+#include <QFile>
+#include <QIODevice>
+
+Shield::Shield() : defenseFactor(0.0) {}
+
+Shield::Shield(const QString& name, const QString& description,
+               double defenseFactor, const QString& defenseType)
+    : name(name), description(description),
+      defenseFactor(defenseFactor), defenseType(defenseType) {}
+
+QJsonObject Shield::toJson() const
+{
+    QJsonObject obj;
+    obj["name"] = name;
+    obj["description"] = description;
+    obj["defenseFactor"] = defenseFactor;
+    obj["defenseType"] = defenseType;
+    return obj;
+}
+
+Shield Shield::fromJson(const QJsonObject& json)
+{
+    Shield s;
+    s.name = json["name"].toString();
+    s.description = json["description"].toString();
+    s.defenseFactor = json["defenseFactor"].toDouble();
+    s.defenseType = json["defenseType"].toString();
+    return s;
+}
+
+void Shield::saveToFile(const QString& filename) const
+{
+    QFile file(filename);
+    if (!file.open(QIODevice::WriteOnly)) return;
+
+    QJsonDocument doc(toJson());
+    file.write(doc.toJson());
+    file.close();
+}
+
+Shield Shield::loadFromFile(const QString& filename)
+{
+    QFile file(filename);
+    if (!file.open(QIODevice::ReadOnly)) return Shield();
+
+    QByteArray data = file.readAll();
+    file.close();
+
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    return fromJson(doc.object());
+}
+
+bool Shield::isValid() const
+{
+    if (name.isEmpty()) return false;
+    if (description.isEmpty()) return false;
+    if (defenseFactor < 0.0 || defenseFactor > 1.0) return false;
+    if (defenseType.isEmpty()) return false;
+    return true;
+}
+
+QString Shield::errorMessage() const
+{
+    QString errors;
+    if (name.isEmpty()) errors += "Название не заполнено; ";
+    if (description.isEmpty()) errors += "Описание не заполнено; ";
+    if (defenseFactor < 0.0 || defenseFactor > 1.0) errors += "Коэффициент защиты вне диапазона 0-1; ";
+    if (defenseType.isEmpty()) errors += "Тип защиты не заполнен; ";
+    return errors;
+}
+
+bool Shield::isValidFactor(const QString& text)
+{
+    if (text.isEmpty()) return true;
+    bool ok;
+    double value = text.toDouble(&ok);
+    if (!ok) return false;
+    if (value < 0.0) return false;
+    if (value > 1.0) return false;
+    return true;
+}   #ifndef MAINWINDOW_HPP
+#define MAINWINDOW_HPP
+
+#include <QMainWindow>
+#include <QMouseEvent>
+#include "shield.hpp"
+
+namespace Ui {
+class MainWindow;
+}
+
+class MainWindow : public QMainWindow
+{
+    Q_OBJECT
+
+public:
+    explicit MainWindow(QWidget *parent = nullptr);
+    ~MainWindow();
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override;
+
+private slots:
+    void on_okButton_clicked();
+    void on_loadTxtButton_clicked();
+    void on_factorSpinBox_textChanged(const QString& text);
+
+private:
+    Ui::MainWindow *ui;
+    void fillFormFromShield(const Shield& s);
+    Shield collectFormData() const;
+};
+
+#endif // MAINWINDOW_HPP
+#include "mainwindow.hpp"
+#include "ui_mainwindow.h"
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QFile>
+#include <QTextStream>
+#include <QMouseEvent>
+
+MainWindow::MainWindow(QWidget *parent) :
+    QMainWindow(parent),
+    ui(new Ui::MainWindow)
+{
+    ui->setupUi(this);
+
+    connect(ui->factorSpinBox, &QLineEdit::textChanged,
+            this, &MainWindow::on_factorSpinBox_textChanged);
+}
+
+MainWindow::~MainWindow()
+{
+    delete ui;
+}
+
+void MainWindow::mousePressEvent(QMouseEvent *event)
+{
+    QWidget *clickedWidget = childAt(event->pos());
+
+    if (!clickedWidget || clickedWidget == centralWidget()) {
+        ui->nameEdit->clearFocus();
+        ui->descEdit->clearFocus();
+        ui->factorSpinBox->clearFocus();
+        ui->typeEdit->clearFocus();
+    }
+
+    QMainWindow::mousePressEvent(event);
+}
+
+void MainWindow::fillFormFromShield(const Shield& s)
+{
+    ui->nameEdit->setText(s.name);
+    ui->descEdit->setText(s.description);
+    ui->factorSpinBox->setText(QString::number(s.defenseFactor));
+    ui->typeEdit->setText(s.defenseType);
+}
+
+Shield MainWindow::collectFormData() const
+{
+    return Shield(
+        ui->nameEdit->text(),
+        ui->descEdit->toPlainText(),
+        ui->factorSpinBox->text().toDouble(),
+        ui->typeEdit->text()
+    );
+}
+
+void MainWindow::on_okButton_clicked()
+{
+    Shield s = collectFormData();
+    QString fileName = QFileDialog::getSaveFileName(this, "Сохранить JSON", "", "JSON (*.json)");
+    if (fileName.isEmpty()) return;
+    s.saveToFile(fileName);
+    QMessageBox::information(this, "Готово", "Объект сохранён в JSON.");
+}
+
+void MainWindow::on_loadTxtButton_clicked()
+{
+    QString fileName = QFileDialog::getOpenFileName(this, "Открыть TXT", "", "Текстовые файлы (*.txt)");
+    if (fileName.isEmpty()) return;
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+
+    QString name, desc, type;
+    double factor = 0.0;
+
+    while (!file.atEnd()) {
+        QString line = file.readLine().trimmed();
+        if (line.startsWith("Название:"))
+            name = line.mid(QString("Название:").length()).trimmed();
+        else if (line.startsWith("Описание:"))
+            desc = line.mid(QString("Описание:").length()).trimmed();
+        else if (line.startsWith("Коэффициент защиты:"))
+            factor = line.mid(QString("Коэффициент защиты:").length()).trimmed().toDouble();
+        else if (line.startsWith("Тип защиты:"))
+            type = line.mid(QString("Тип защиты:").length()).trimmed();
+    }
+
+    file.close();
+
+    Shield s(name, desc, factor, type);
+    fillFormFromShield(s);
+    QMessageBox::information(this, "Загружено", "Данные из TXT перенесены в форму. Нажмите OK, чтобы сохранить как JSON.");
+}
+
+void MainWindow::on_factorSpinBox_textChanged(const QString& text)
+{
+    if (text.isEmpty()) return;
+
+    QString allowed = "0123456789.";
+    QString filtered;
+
+    for (const QChar& ch : text) {
+        if (allowed.contains(ch)) {
+            if (ch == '.' && filtered.contains('.')) continue;
+            filtered += ch;
+        }
+    }
+
+    if (!filtered.isEmpty() && filtered != ".") {
+        double value = filtered.toDouble();
+        if (value > 1.0) filtered = "1.0";
+    }
+
+    if (filtered != text) {
+        ui->factorSpinBox->blockSignals(true);
+        ui->factorSpinBox->setText(filtered);
+        ui->factorSpinBox->blockSignals(false);
+    }
+}
