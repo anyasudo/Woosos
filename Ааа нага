@@ -13,3 +13,30 @@ void MainWindow::on_okButton_clicked()
     s.saveToFile(fileName);
     QMessageBox::information(this, "Готово", "Объект сохранён в JSON.");
 }
+
+void MainWindow::addToErrorTable(const Shield& s, const QString& error)
+{
+    int row = ui->tableErrors->rowCount();
+    ui->tableErrors->insertRow(row);
+
+    QColor redColor(255, 200, 200);
+
+    QTableWidgetItem *item0 = new QTableWidgetItem(s.name);
+    if (s.name.isEmpty()) item0->setBackground(redColor);
+    ui->tableErrors->setItem(row, 0, item0);
+
+    QTableWidgetItem *item1 = new QTableWidgetItem(s.description);
+    if (s.description.isEmpty()) item1->setBackground(redColor);
+    ui->tableErrors->setItem(row, 1, item1);
+
+    QTableWidgetItem *item2 = new QTableWidgetItem(QString::number(s.defenseFactor));
+    if (s.defenseFactor < 0.0 || s.defenseFactor > 1.0) item2->setBackground(redColor);
+    ui->tableErrors->setItem(row, 2, item2);
+
+    QTableWidgetItem *item3 = new QTableWidgetItem(s.defenseType);
+    if (s.defenseType.isEmpty()) item3->setBackground(redColor);
+    ui->tableErrors->setItem(row, 3, item3);
+
+    QTableWidgetItem *item4 = new QTableWidgetItem(error);
+    ui->tableErrors->setItem(row, 4, item4);
+}
